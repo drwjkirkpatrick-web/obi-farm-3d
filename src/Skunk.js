@@ -6,11 +6,10 @@ import { FENCE_LIMIT } from './World.js';
 export class Skunk {
   constructor(scene) {
     this.scene = scene;
-    this.mesh = this.build();
-    scene.add(this.mesh);
-
     this.pos = new THREE.Vector3(0, 0, -50); // off-screen initially
     this.vel = new THREE.Vector3();
+    this.mesh = this.build();
+    scene.add(this.mesh);
     this.speed = 3.5;
     this.facing = 0;
     this.active = false;        // appears in evening

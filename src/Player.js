@@ -7,12 +7,10 @@ export class Player {
   constructor(scene, camera) {
     this.scene = scene;
     this.camera = camera;
-    this.mesh = this.build();
-    scene.add(this.mesh);
-
-    // State
     this.pos = new THREE.Vector3(0, 0, 10);
     this.vel = new THREE.Vector3();
+    this.mesh = this.build();
+    scene.add(this.mesh);
     this.speed = 7;
     this.sprintSpeed = 12;
     this.isSprinting = false;

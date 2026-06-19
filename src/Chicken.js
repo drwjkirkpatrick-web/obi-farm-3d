@@ -19,13 +19,12 @@ export class Chicken {
     this.index = index;
     this.name = CHICKEN_NAMES[index % CHICKEN_NAMES.length];
     this.color = CHICKEN_COLORS[index % CHICKEN_COLORS.length];
-    this.mesh = this.build();
-    scene.add(this.mesh);
-
     // Spawn near the coop
     const a = (index / 6) * Math.PI * 2;
     this.pos = new THREE.Vector3(-15 + Math.cos(a) * 5, 0, 20 + Math.sin(a) * 5);
     this.vel = new THREE.Vector3();
+    this.mesh = this.build();
+    scene.add(this.mesh);
     this.baseSpeed = 2 + Math.random();
     this.fleeSpeed = 5 + Math.random() * 2;
     this.facing = 0;

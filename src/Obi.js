@@ -6,11 +6,10 @@ import { FENCE_LIMIT } from './World.js';
 export class Obi {
   constructor(scene) {
     this.scene = scene;
-    this.mesh = this.build();
-    scene.add(this.mesh);
-
     this.pos = new THREE.Vector3(15, 0, -5);
     this.vel = new THREE.Vector3();
+    this.mesh = this.build();
+    scene.add(this.mesh);
     this.baseSpeed = 6;
     this.chaseSpeed = 8;
     this.fleeSpeed = 11;

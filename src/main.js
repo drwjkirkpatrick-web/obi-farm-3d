@@ -373,7 +373,14 @@ class Game {
     const dt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
 
-    this.update(dt);
+    try {
+      this.update(dt);
+    } catch (e) {
+      if (!this._updateErrorLogged) {
+        this._updateErrorLogged = true;
+        console.error('Update loop error:', e.message, e.stack);
+      }
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
