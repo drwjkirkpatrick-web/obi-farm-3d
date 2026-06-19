@@ -26,70 +26,70 @@ export class Obi {
   build() {
     const g = new THREE.Group();
 
-    // Dachshund body — long and low (signature silhouette)
+    // Dachshund body — long and low (signature silhouette) — BIGGER for visibility
     const bodyMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b }); // brown
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.0, 6, 10), bodyMat);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.4, 6, 10), bodyMat);
     body.rotation.z = Math.PI / 2;
-    body.position.y = 0.5;
+    body.position.y = 0.7;
     body.castShadow = true;
     g.add(body);
 
     // Belly (slightly lighter)
     const bellyMat = new THREE.MeshLambertMaterial({ color: 0xa87542 });
-    const belly = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.8, 4, 8), bellyMat);
+    const belly = new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 1.1, 4, 8), bellyMat);
     belly.rotation.z = Math.PI / 2;
-    belly.position.y = 0.4;
+    belly.position.y = 0.55;
     g.add(belly);
 
     // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), bodyMat);
-    head.position.set(0.75, 0.65, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), bodyMat);
+    head.position.set(1.05, 0.9, 0);
     head.castShadow = true;
     g.add(head);
     this.head = head;
 
     // Snout
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.3, 8), bodyMat);
-    snout.position.set(1.0, 0.58, 0);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 8), bodyMat);
+    snout.position.set(1.4, 0.82, 0);
     snout.rotation.z = -Math.PI / 2;
     g.add(snout);
 
     // Nose (black)
     const noseMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), noseMat);
-    nose.position.set(1.12, 0.58, 0);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), noseMat);
+    nose.position.set(1.57, 0.82, 0);
     g.add(nose);
 
     // Eyes
     const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-    const eyeGeo = new THREE.SphereGeometry(0.05, 6, 6);
+    const eyeGeo = new THREE.SphereGeometry(0.07, 6, 6);
     const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(0.8, 0.78, 0.15);
+    leftEye.position.set(1.12, 1.05, 0.2);
     g.add(leftEye);
     const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(0.8, 0.78, -0.15);
+    rightEye.position.set(1.12, 1.05, -0.2);
     g.add(rightEye);
 
     // Floppy ears
     const earMat = new THREE.MeshLambertMaterial({ color: 0x6b4020 });
-    const earGeo = new THREE.CapsuleGeometry(0.08, 0.2, 4, 6);
+    const earGeo = new THREE.CapsuleGeometry(0.12, 0.28, 4, 6);
     const leftEar = new THREE.Mesh(earGeo, earMat);
-    leftEar.position.set(0.65, 0.5, 0.22);
+    leftEar.position.set(0.92, 0.72, 0.3);
     leftEar.rotation.z = 0.3;
     g.add(leftEar);
     const rightEar = new THREE.Mesh(earGeo, earMat);
-    rightEar.position.set(0.65, 0.5, -0.22);
+    rightEar.position.set(0.92, 0.72, -0.3);
     rightEar.rotation.z = 0.3;
     g.add(rightEar);
     this.leftEar = leftEar;
     this.rightEar = rightEar;
 
-    // Legs (short stubby dachshund legs)
+    // Legs (short stubby dachshund legs) — bigger
     const legMat = new THREE.MeshLambertMaterial({ color: 0x6b4020 });
-    const legGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.4, 6);
+    const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.55, 6);
     const legPositions = [
-      [0.5, 0.2, 0.18], [0.5, 0.2, -0.18],
-      [-0.5, 0.2, 0.18], [-0.5, 0.2, -0.18],
+      [0.7, 0.275, 0.25], [0.7, 0.275, -0.25],
+      [-0.7, 0.275, 0.25], [-0.7, 0.275, -0.25],
     ];
     this.legs = [];
     legPositions.forEach((p) => {
@@ -101,18 +101,50 @@ export class Obi {
     });
 
     // Tail
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.4, 6), bodyMat);
-    tail.position.set(-0.7, 0.6, 0);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.55, 6), bodyMat);
+    tail.position.set(-0.98, 0.85, 0);
     tail.rotation.z = Math.PI / 2 + 0.3;
     g.add(tail);
     this.tail = tail;
 
     // Collar (red)
     const collarMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 6, 12), collarMat);
-    collar.position.set(0.55, 0.6, 0);
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.07, 6, 12), collarMat);
+    collar.position.set(0.77, 0.85, 0);
     collar.rotation.y = Math.PI / 2;
     g.add(collar);
+
+    // ─── Floating exclamation marker ──────────────────────────────────
+    // A red "!" that bobs above Obi's head, visible from far away
+    const markerGroup = new THREE.Group();
+
+    // The exclamation: a red stick + dot
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+    const stick = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.06, 0.35, 4, 6),
+      markerMat
+    );
+    stick.position.y = 0.22;
+    markerGroup.add(stick);
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 6, 6),
+      markerMat
+    );
+    dot.position.y = 0.0;
+    markerGroup.add(dot);
+
+    // Glow ring beneath
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff3333, transparent: true, opacity: 0.3, side: THREE.DoubleSide
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.35, 16), ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -0.05;
+    markerGroup.add(ring);
+
+    markerGroup.position.set(0, 2.2, 0);
+    g.add(markerGroup);
+    this.marker = markerGroup;
 
     g.position.copy(this.pos);
     return g;
@@ -214,6 +246,15 @@ export class Obi {
     if (Math.hypot(this.vel.x, this.vel.z) > 0.5) {
       this.facing = Math.atan2(this.vel.x, this.vel.z);
       this.mesh.rotation.y = this.facing - Math.PI / 2;
+    }
+
+    // Animate floating exclamation marker
+    if (this.marker) {
+      const t = performance.now() * 0.003;
+      this.marker.position.y = 2.2 + Math.sin(t) * 0.2;
+      this.marker.rotation.y = t * 0.5;
+      // Hide marker when tagged
+      this.marker.visible = (this.taggedTimer <= 0);
     }
 
     // Leg animation

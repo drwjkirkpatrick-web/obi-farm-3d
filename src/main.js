@@ -12,6 +12,12 @@ import { Player } from './Player.js';
 import { Obi } from './Obi.js';
 import { Chicken, createChickens } from './Chicken.js';
 import { Skunk } from './Skunk.js';
+import { SoundManager } from './Sound.js';
+import {
+  FeatherTrail, HeartParticles, SadFace, StinkCloud,
+  DustTrail, Confetti, Fireflies
+} from './Effects.js';
+import { MiniMap } from './MiniMap.js';
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 const titleScreen = document.getElementById('title-screen');
@@ -95,6 +101,31 @@ class Game {
     this.obi = new Obi(this.scene);
     this.chickens = createChickens(this.scene, 6);
     this.skunk = new Skunk(this.scene);
+
+    // ─── Audio ────────────────────────────────────────────────────────
+    this.sound = new SoundManager();
+
+    // ─── Visual effects ───────────────────────────────────────────────
+    this.featherTrail = new FeatherTrail(this.scene);
+    this.heartParticles = new HeartParticles(this.scene);
+    this.sadFace = new SadFace(this.scene);
+    this.stinkCloud = new StinkCloud(this.scene);
+    this.dustTrail = new DustTrail(this.scene);
+    this.confetti = new Confetti(this.scene);
+    this.fireflies = null; // created at evening
+
+    // ─── Mini-map ──────────────────────────────────────────────────────
+    this.miniMap = new MiniMap();
+
+    // ─── Effect timers ────────────────────────────────────────────────
+    this.featherTimer = 0;
+    this.heartTimer = 0;
+    this.dustTimer = 0;
+    this.stinkTimer = 0;
+    this.barkTimer = 0;
+    this.cluckTimer = 0;
+    this.victoryDanceTimer = 0;
+    this.cameraRotateTarget = null;
 
     // ─── Game state ───────────────────────────────────────────────────
     this.state = 'playing';   // 'playing' | 'won' | 'lost'
@@ -203,6 +234,12 @@ class Game {
     const points = 100;
     this.score += points;
     this.showMessage(`Gotcha Obi! (${this.obiTagsCount}/${this.obiTagsNeeded})`, 2.0);
+    this.sound.giggle();
+
+    // Hearts from saved chickens
+    this.chickens.forEach(c => {
+      if (!c.caught) this.heartParticles.emit(c.pos.x, 0.5, c.pos.z);
+    });
 
     if (this.obiTagsCount >= this.obiTagsNeeded) {
       this.win();
@@ -212,26 +249,38 @@ class Game {
   // ─── Win ──────────────────────────────────────────────────────────────
   win() {
     this.state = 'won';
+    this.sound.win();
+    // Victory dance: confetti burst + chicken hop + Obi roll
+    this.confetti.burst(this.player.pos.x, 0, this.player.pos.z, 80);
+    this.victoryDanceTimer = 3.0;
+
     // Bonus for remaining safe chickens
     const safe = this.chickens.filter(c => !c.caught).length;
     this.score += safe * 50;
-    winScoreEl.textContent = `Score: ${this.score}`;
-    winChickensEl.textContent = `${safe} chicken${safe !== 1 ? 's' : ''} safe!`;
-    const mins = Math.floor(this.gameTime / 60);
-    const secs = Math.floor(this.gameTime % 60);
-    winTimeEl.textContent = `Time: ${mins}:${secs.toString().padStart(2, '0')}`;
-    hudEl.classList.add('hidden');
-    touchControls.classList.add('hidden');
-    winScreen.classList.remove('hidden');
+
+    // Show win screen after victory dance
+    setTimeout(() => {
+      winScoreEl.textContent = `Score: ${this.score}`;
+      winChickensEl.textContent = `${safe} chicken${safe !== 1 ? 's' : ''} safe!`;
+      const mins = Math.floor(this.gameTime / 60);
+      const secs = Math.floor(this.gameTime % 60);
+      winTimeEl.textContent = `Time: ${mins}:${secs.toString().padStart(2, '0')}`;
+      hudEl.classList.add('hidden');
+      touchControls.classList.add('hidden');
+      this.miniMap.hide();
+      winScreen.classList.remove('hidden');
+    }, 2500);
   }
 
   // ─── Lose ─────────────────────────────────────────────────────────────
   lose(reason) {
     this.state = 'lost';
+    this.sound.sad();
     loseReasonEl.textContent = reason;
     loseScoreEl.textContent = `Score: ${this.score}`;
     hudEl.classList.add('hidden');
     touchControls.classList.add('hidden');
+    this.miniMap.hide();
     loseScreen.classList.remove('hidden');
   }
 
@@ -247,19 +296,28 @@ class Game {
     this.gameTime += dt;
 
     // Phase transitions based on time
-    if (this.gameTime > 60 && this.dayPhase === 'afternoon') {
+    if (this.gameTime > 45 && this.dayPhase === 'afternoon') {
       this.dayPhase = 'evening';
       timeLabelEl.textContent = 'Evening 🌅';
-      this.scene.background = new THREE.Color(0xff8c42);
-      this.scene.fog.color.set(0xff8c42);
-      this.sunLight.color.set(0xffaa66);
-      this.sunLight.intensity = 0.8;
-      this.ambientLight.intensity = 0.3;
-      this.ambientLight.color.set(0xff9966);
-      this.hemiLight.intensity = 0.2;
-      this.showMessage('🦨 The skunk comes out at evening!', 3.0);
+
+      // Dramatic evening transition
+      this.scene.background = new THREE.Color(0xff6b35);
+      this.scene.fog.color.set(0xff6b35);
+      this.sunLight.color.set(0xff8844);
+      this.sunLight.intensity = 0.7;
+      this.ambientLight.intensity = 0.25;
+      this.ambientLight.color.set(0xff7744);
+      this.hemiLight.intensity = 0.15;
+      this.hemiLight.color.set(0xff8844);
+
+      // Spawn fireflies
+      this.fireflies = new Fireflies(this.scene, 40);
+
+      // Show evening banner
+      this.showEveningBanner();
+      this.sound.evening();
       this.skunk.appear();
-    } else if (this.gameTime > 30 && this.dayPhase === 'morning') {
+    } else if (this.gameTime > 20 && this.dayPhase === 'morning') {
       this.dayPhase = 'afternoon';
       timeLabelEl.textContent = 'Afternoon ☀️';
     }
@@ -271,12 +329,57 @@ class Game {
     });
 
     // Animate sun position
-    const sunAngle = (this.gameTime / 120) * Math.PI; // full cycle in 2 min
+    const sunAngle = (this.gameTime / 120) * Math.PI;
     this.sunLight.position.set(
       Math.cos(sunAngle) * 40,
       Math.sin(sunAngle) * 40 + 10,
       20
     );
+
+    // Update fireflies if active
+    if (this.fireflies) this.fireflies.update(dt);
+  }
+
+  // ─── Evening banner ───────────────────────────────────────────────────
+  showEveningBanner() {
+    const banner = document.createElement('div');
+    banner.style.cssText = `
+      position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, rgba(255,107,53,0.9), rgba(200,60,30,0.9));
+      color: #fff; font-size: 36px; font-weight: 800;
+      padding: 20px 50px; border-radius: 50px;
+      z-index: 40; pointer-events: none;
+      text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      animation: bannerPulse 0.5s ease;
+    `;
+    banner.innerHTML = '🦨 Skunk Alert! Evening on the Farm!';
+    banner.id = 'evening-banner';
+    document.body.appendChild(banner);
+
+    // Add CSS animation
+    if (!document.getElementById('banner-anim')) {
+      const style = document.createElement('style');
+      style.id = 'banner-anim';
+      style.textContent = `
+        @keyframes bannerPulse {
+          0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+          50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        @keyframes bannerFade {
+          from { opacity: 1; }
+          to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Fade out after 3 seconds
+    setTimeout(() => {
+      banner.style.animation = 'bannerFade 0.8s ease forwards';
+      setTimeout(() => banner.remove(), 800);
+    }, 3000);
   }
 
   // ─── Collision with obstacles (simple circle check) ──────────────────
@@ -306,6 +409,18 @@ class Game {
 
   // ─── Main update ──────────────────────────────────────────────────────
   update(dt) {
+    if (this.state === 'won' && this.victoryDanceTimer > 0) {
+      // Victory dance: chickens hop, Obi rolls, confetti continues
+      this.victoryDanceTimer -= dt;
+      this.chickens.forEach(c => {
+        if (!c.caught) c.mesh.position.y = 0.3 + Math.abs(Math.sin(performance.now() * 0.008 + c.index)) * 0.4;
+      });
+      this.obi.mesh.rotation.z = performance.now() * 0.01;
+      this.confetti.update(dt);
+      this.heartParticles.update(dt);
+      return;
+    }
+
     if (this.state !== 'playing') return;
 
     this.updateDayCycle(dt);
@@ -316,15 +431,89 @@ class Game {
     this.chickens.forEach(c => c.update(dt, this.obi, this.player));
     this.skunk.update(dt, this.player, this.obi);
 
-    // Obstacle collisions
+    // ─── Camera auto-rotate towards Obi when he's chasing ────────────
+    if (this.obi.state === 'chase' && this.player.distanceTo(this.obi.pos) > 15) {
+      // Subtly rotate camera to point towards Obi
+      const angleToObi = Math.atan2(
+        this.obi.pos.x - this.player.pos.x,
+        this.obi.pos.z - this.player.pos.z
+      );
+      this.player.camAngle += (angleToObi - this.player.camAngle) * 0.02;
+    }
+
+    // ─── Feather trail when Obi is chasing ───────────────────────────
+    this.featherTimer -= dt;
+    if (this.obi.state === 'chase' && this.featherTimer <= 0) {
+      // Emit feathers near the targeted chicken
+      if (this.obi.target && !this.obi.target.caught) {
+        this.featherTrail.emit(this.obi.target.pos.x, 0, this.obi.target.pos.z);
+      }
+      this.featherTimer = 0.3;
+    }
+
+    // ─── Bark sound when Obi chases ──────────────────────────────────
+    this.barkTimer -= dt;
+    if (this.obi.state === 'chase' && this.barkTimer <= 0) {
+      this.sound.bark();
+      this.barkTimer = 2 + Math.random() * 2;
+    }
+
+    // ─── Cluck sound when chickens are scared ────────────────────────
+    this.cluckTimer -= dt;
+    const anyScared = this.chickens.some(c => c.scared);
+    if (anyScared && this.cluckTimer <= 0) {
+      this.sound.cluck();
+      this.cluckTimer = 1.5 + Math.random();
+    }
+
+    // ─── Dust trail when player sprints ──────────────────────────────
+    this.dustTimer -= dt;
+    if (this.player.isSprinting && this.dustTimer <= 0) {
+      this.dustTrail.emit(this.player.pos.x, 0, this.player.pos.z);
+      this.dustTimer = 0.08;
+    }
+
+    // ─── Stink cloud follows skunk ───────────────────────────────────
+    this.stinkTimer -= dt;
+    if (this.skunk.active) {
+      // Emit stink particles, more intense when ready to spray
+      const intensity = this.skunk._readyToSpray ? 2 : 0.8;
+      if (this.stinkTimer <= 0) {
+        this.stinkCloud.emit(this.skunk.pos.x, 0.3, this.skunk.pos.z, intensity);
+        this.stinkTimer = 0.2 / intensity;
+      }
+    }
+
+    // ─── Heart particles for safe chickens (occasional) ──────────────
+    this.heartTimer -= dt;
+    if (this.heartTimer <= 0) {
+      const safeChickens = this.chickens.filter(c => !c.caught && !c.scared);
+      if (safeChickens.length > 0 && Math.random() < 0.3) {
+        const c = safeChickens[Math.floor(Math.random() * safeChickens.length)];
+        this.heartParticles.emit(c.pos.x, 0.5, c.pos.z);
+      }
+      this.heartTimer = 3 + Math.random() * 2;
+    }
+
+    // ─── Update all particle effects ─────────────────────────────────
+    this.featherTrail.update(dt);
+    this.heartParticles.update(dt);
+    this.sadFace.update(dt, this.camera);
+    this.stinkCloud.update(dt);
+    this.dustTrail.update(dt);
+    this.confetti.update(dt);
+
+    // ─── Obstacle collisions ─────────────────────────────────────────
     this.handleObstacleCollisions(this.player);
     this.handleObstacleCollisions(this.obi);
     this.chickens.forEach(c => this.handleObstacleCollisions(c));
 
-    // Check if Obi caught a chicken
+    // ─── Check if Obi caught a chicken ───────────────────────────────
     const caughtChicken = this.obi.checkChickenCatch(this.chickens);
     if (caughtChicken) {
       this.showMessage(`Oh no! Obi caught ${caughtChicken.name}!`, 2.5);
+      this.sound.sad();
+      this.sadFace.emit(caughtChicken.pos.x, 0, caughtChicken.pos.z);
       const caughtCount = this.obi.chickensCaught;
       if (caughtCount >= this.maxChickensCaught) {
         this.lose(`Obi caught ${caughtCount} chickens!`);
@@ -332,27 +521,31 @@ class Game {
       }
     }
 
-    // Check tag input
+    // ─── Check tag input ─────────────────────────────────────────────
     if (this.player.keys['Space']) {
       if (this.player.tryTag(this.obi)) {
         this.tagObi();
       }
     }
 
-    // Check skunk spray
+    // ─── Check skunk spray ───────────────────────────────────────────
     if (this.skunk.shouldSpray(this.player)) {
       this.skunk.spray();
       this.player.spray();
+      this.sound.spray();
       this.score = Math.max(0, this.score - 30);
       this.showMessage('🦨💨 Pee-ew! You got sprayed!', 3.0);
       sprayEffect.classList.add('show');
       setTimeout(() => sprayEffect.classList.remove('show'), 2000);
     }
 
-    // Update HUD
+    // ─── Update HUD ──────────────────────────────────────────────────
     const safeCount = this.chickens.filter(c => !c.caught).length;
     chickensSafeEl.textContent = safeCount;
     scoreEl.textContent = this.score;
+
+    // ─── Update mini-map ─────────────────────────────────────────────
+    this.miniMap.update(this.player, this.obi, this.chickens, this.skunk);
 
     // Score from surviving (slow trickle)
     this.score += Math.floor(dt * 2);
@@ -402,21 +595,29 @@ function startGame() {
   }
   if (game) {
     // Clean up old game
+    game.miniMap.hide();
     game.renderer.dispose();
     game.canvas.innerHTML = '';
   }
   game = new Game();
+  // Unlock audio on first user gesture
+  game.sound.unlock();
+  game.miniMap.show();
 }
 
 function restartGame() {
   winScreen.classList.add('hidden');
+  loseScreen.classList.remove('hidden');
   loseScreen.classList.add('hidden');
   hudEl.classList.remove('hidden');
   if (game) {
+    game.miniMap.hide();
     game.renderer.dispose();
     game.canvas.innerHTML = '';
   }
   game = new Game();
+  game.sound.unlock();
+  game.miniMap.show();
 }
 
 startBtn.addEventListener('click', startGame);
