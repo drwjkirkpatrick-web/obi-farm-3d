@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   createGround, createMapleTrees, createChickenCoop,
   createBlackberryRows, createFence, createHayBales,
-  createDecorations, createClouds, WORLD_SIZE, FENCE_LIMIT
+  createDecorations, createClouds, createFarmArch, WORLD_SIZE, FENCE_LIMIT
 } from './World.js';
 import { Player } from './Player.js';
 import { Obi } from './Obi.js';
@@ -18,6 +18,11 @@ import {
   DustTrail, Confetti, Fireflies
 } from './Effects.js';
 import { MiniMap } from './MiniMap.js';
+import {
+  createToonGradientMap, createSkyDome, setSkyEvening, setSkyMorning,
+  createBlobShadow, addOutline, addOutlinesToGroup,
+  PollenMotes, WindRegistry
+} from './Visual.js';
 
 // ─── DOM refs ──────────────────────────────────────────────────────────
 const titleScreen = document.getElementById('title-screen');
@@ -55,18 +60,25 @@ class Game {
 
     // ─── Scene ────────────────────────────────────────────────────────
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87ceeb); // sky blue
-    this.scene.fog = new THREE.Fog(0x87ceeb, 60, 120);
+    // Sky dome replaces solid background
+    this.skyDome = createSkyDome();
+    this.scene.add(this.skyDome);
+    this.scene.fog = new THREE.Fog(0xc8e0ff, 60, 130); // match horizon
 
     // ─── Camera ───────────────────────────────────────────────────────
     this.camera = new THREE.PerspectiveCamera(
-      60, window.innerWidth / window.innerHeight, 0.1, 200
+      60, window.innerWidth / window.innerHeight, 0.1, 250
     );
     this.camera.position.set(0, 12, 20);
 
-    // ─── Lights ───────────────────────────────────────────────────────
-    // Sun
-    this.sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    // ─── Toon gradient map ────────────────────────────────────────────
+    const toonGradient = createToonGradientMap();
+    // Store globally so toToonMaterial can access
+    this._toonGradient = toonGradient;
+
+    // ─── Three-point cinematic lighting ───────────────────────────────
+    // Key light (warm sun)
+    this.sunLight = new THREE.DirectionalLight(0xfff5e0, 1.0);
     this.sunLight.position.set(30, 40, 20);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(2048, 2048);
@@ -78,29 +90,75 @@ class Game {
     this.sunLight.shadow.camera.far = 100;
     this.scene.add(this.sunLight);
 
+    // Fill light (cool sky bounce — opposite side)
+    this.fillLight = new THREE.DirectionalLight(0x8899ff, 0.3);
+    this.fillLight.position.set(-30, 20, -15);
+    this.scene.add(this.fillLight);
+
+    // Rim light (warm backlight — behind subjects)
+    this.rimLight = new THREE.DirectionalLight(0xffddaa, 0.25);
+    this.rimLight.position.set(0, 15, -40);
+    this.scene.add(this.rimLight);
+
     // Ambient
-    this.ambientLight = new THREE.AmbientLight(0x90b8e0, 0.5);
+    this.ambientLight = new THREE.AmbientLight(0x90b8e0, 0.3);
     this.scene.add(this.ambientLight);
 
     // Hemisphere (sky + ground bounce)
-    this.hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x5a8a3a, 0.4);
+    this.hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x5a8a3a, 0.3);
     this.scene.add(this.hemiLight);
+
+    // ─── Wind registry ────────────────────────────────────────────────
+    this.wind = new WindRegistry();
 
     // ─── Build world ──────────────────────────────────────────────────
     createGround(this.scene);
-    createMapleTrees(this.scene);
+    createMapleTrees(this.scene, this.wind);
     this.coopInfo = createChickenCoop(this.scene);
-    this.bushPositions = createBlackberryRows(this.scene);
+    this.bushPositions = createBlackberryRows(this.scene, this.wind);
     createFence(this.scene);
     this.hayBales = createHayBales(this.scene);
     createDecorations(this.scene);
     this.clouds = createClouds(this.scene);
+    createFarmArch(this.scene);
+
+    // ─── Pollen motes ─────────────────────────────────────────────────
+    this.pollen = new PollenMotes(this.scene, 60);
 
     // ─── Entities ─────────────────────────────────────────────────────
     this.player = new Player(this.scene, this.camera);
     this.obi = new Obi(this.scene);
     this.chickens = createChickens(this.scene, 6);
     this.skunk = new Skunk(this.scene);
+
+    // ─── Blob shadows + outlines on characters ───────────────────────
+    this.entityShadows = [];
+
+    // Player
+    const playerShadow = createBlobShadow(0.9);
+    this.player.mesh.add(playerShadow);
+    this.entityShadows.push({ shadow: playerShadow, entity: this.player });
+    addOutlinesToGroup(this.player.mesh, 0x222222, 0.35);
+
+    // Obi
+    const obiShadow = createBlobShadow(0.8);
+    this.obi.mesh.add(obiShadow);
+    this.entityShadows.push({ shadow: obiShadow, entity: this.obi });
+    addOutlinesToGroup(this.obi.mesh, 0x222222, 0.35);
+
+    // Chickens
+    this.chickens.forEach(c => {
+      const cs = createBlobShadow(0.4);
+      c.mesh.add(cs);
+      this.entityShadows.push({ shadow: cs, entity: c });
+      addOutlinesToGroup(c.mesh, 0x333333, 0.3);
+    });
+
+    // Skunk
+    const skunkShadow = createBlobShadow(0.5);
+    this.skunk.mesh.add(skunkShadow);
+    this.entityShadows.push({ shadow: skunkShadow, entity: this.skunk });
+    addOutlinesToGroup(this.skunk.mesh, 0x222222, 0.35);
 
     // ─── Audio ────────────────────────────────────────────────────────
     this.sound = new SoundManager();
@@ -301,14 +359,20 @@ class Game {
       timeLabelEl.textContent = 'Evening 🌅';
 
       // Dramatic evening transition
-      this.scene.background = new THREE.Color(0xff6b35);
+      setSkyEvening(this.skyDome);
       this.scene.fog.color.set(0xff6b35);
       this.sunLight.color.set(0xff8844);
       this.sunLight.intensity = 0.7;
-      this.ambientLight.intensity = 0.25;
+      this.fillLight.color.set(0x4466aa);
+      this.fillLight.intensity = 0.2;
+      this.rimLight.color.set(0xff6633);
+      this.ambientLight.intensity = 0.2;
       this.ambientLight.color.set(0xff7744);
-      this.hemiLight.intensity = 0.15;
+      this.hemiLight.intensity = 0.1;
       this.hemiLight.color.set(0xff8844);
+
+      // Fade out pollen motes (fireflies take over)
+      this.pollen.fadeOut();
 
       // Spawn fireflies
       this.fireflies = new Fireflies(this.scene, 40);
@@ -338,6 +402,19 @@ class Game {
 
     // Update fireflies if active
     if (this.fireflies) this.fireflies.update(dt);
+
+    // Update wind sway on trees and bushes
+    this.wind.update();
+
+    // Update pollen motes
+    this.pollen.update(dt);
+
+    // Update blob shadows to follow entities on ground
+    this.entityShadows.forEach(es => {
+      es.shadow.position.x = 0;
+      es.shadow.position.z = 0;
+      // Shadow is child of mesh, so local 0,0 = at entity's feet
+    });
   }
 
   // ─── Evening banner ───────────────────────────────────────────────────

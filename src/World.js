@@ -7,24 +7,38 @@ export const WORLD_SIZE = 120;     // total play area
 export const FENCE_LIMIT = 55;     // player can't go past this
 export const GROUND_Y = 0;
 
-// ─── Helper: make a soft circle of instances ───────────────────────────
-function scatterPositions(count, radius, centerX, centerZ, seed) {
-  const positions = [];
-  let s = seed;
-  const rand = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-  for (let i = 0; i < count; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = Math.sqrt(rand()) * radius;
-    positions.push([centerX + Math.cos(a) * r, 0, centerZ + Math.sin(a) * r]);
+// ─── Helper: per-vertex terrain coloring ───────────────────────────────
+function paintTerrain(geo, colors) {
+  const positions = geo.attributes.position;
+  const colorArr = new Float32Array(positions.count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
+    // Simple noise from coordinates
+    const n = Math.sin(x * 0.15) * Math.cos(z * 0.12) + Math.sin(x * 0.07 + z * 0.09) * 0.5;
+    const t = (n + 1.5) / 3; // 0..1
+    // Blend between 4 green shades
+    if (t < 0.33) {
+      c.setHex(colors[0]);
+    } else if (t < 0.66) {
+      c.lerpColors(new THREE.Color(colors[0]), new THREE.Color(colors[1]), (t - 0.33) * 3);
+    } else {
+      c.lerpColors(new THREE.Color(colors[1]), new THREE.Color(colors[2]), (t - 0.66) * 3);
+    }
+    colorArr[i * 3] = c.r;
+    colorArr[i * 3 + 1] = c.g;
+    colorArr[i * 3 + 2] = c.b;
   }
-  return positions;
+  geo.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
+  return new THREE.MeshLambertMaterial({ vertexColors: true });
 }
 
 // ─── Ground ────────────────────────────────────────────────────────────
 export function createGround(scene) {
-  // Main grass field — a soft green with subtle variation
-  const grassGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 32, 32);
-  const grassMat = new THREE.MeshLambertMaterial({ color: 0x5a8a3a });
+  // Main grass field — vertex-colored for variation
+  const grassGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 48, 48);
+  const grassMat = paintTerrain(grassGeo, [0x4a7a2a, 0x5a8a3a, 0x6faa4e]);
   const grass = new THREE.Mesh(grassGeo, grassMat);
   grass.rotation.x = -Math.PI / 2;
   grass.receiveShadow = true;
@@ -32,7 +46,7 @@ export function createGround(scene) {
 
   // Meadow area — slightly lighter green patch to the east
   const meadowGeo = new THREE.CircleGeometry(22, 32);
-  const meadowMat = new THREE.MeshLambertMaterial({ color: 0x6faa4e });
+  const meadowMat = new THREE.MeshLambertMaterial({ color: 0x7fc060 });
   const meadow = new THREE.Mesh(meadowGeo, meadowMat);
   meadow.rotation.x = -Math.PI / 2;
   meadow.position.set(30, 0.01, -15);
@@ -74,26 +88,30 @@ export function createGround(scene) {
 }
 
 // ─── Maple trees lining the road ───────────────────────────────────────
-export function createMapleTrees(scene) {
+export function createMapleTrees(scene, windRegistry) {
   const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
   const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
   const leafGeo = new THREE.SphereGeometry(2.5, 12, 10);
   const leafMat = new THREE.MeshLambertMaterial({ color: 0xc0392b }); // red-orange maples
 
+  const canopies = [];
+
   // Trees on both sides of the road, spaced along it
   for (let i = -50; i <= 50; i += 10) {
-    // North side of road
-    makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, i, -48);
-    // South side of road
-    makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, i, -42);
+    const c1 = makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, i, -48, windRegistry);
+    if (c1) canopies.push(c1);
+    const c2 = makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, i, -42, windRegistry);
+    if (c2) canopies.push(c2);
   }
   // A few scattered maples near the meadow edge
-  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, 12, 8);
-  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, -20, 12);
-  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, 45, 5);
+  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, 12, 8, windRegistry);
+  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, -20, 12, windRegistry);
+  makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, 45, 5, windRegistry);
+
+  return canopies;
 }
 
-function makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, x, z) {
+function makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, x, z, windRegistry) {
   const tree = new THREE.Group();
 
   const trunk = new THREE.Mesh(trunkGeo, trunkMat);
@@ -104,7 +122,6 @@ function makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, x, z) {
   // 3 overlapping leaf spheres for a fuller canopy
   const canopy = new THREE.Group();
   const leafMatVariant = leafMat.clone();
-  // Slight color variation per tree
   const hueShift = (Math.random() - 0.5) * 0.06;
   leafMatVariant.color.offsetHSL(hueShift, 0, (Math.random() - 0.5) * 0.1);
 
@@ -120,8 +137,15 @@ function makeTree(scene, trunkGeo, trunkMat, leafGeo, leafMat, x, z) {
     canopy.add(leaves);
   }
   tree.add(canopy);
+
+  // Register canopy for wind sway
+  if (windRegistry) {
+    windRegistry.register(canopy, 0.02 + Math.random() * 0.02);
+  }
+
   tree.position.set(x, 0, z);
   scene.add(tree);
+  return canopy;
 }
 
 // ─── Chicken Coop ──────────────────────────────────────────────────────
@@ -224,8 +248,82 @@ export function createChickenCoop(scene) {
   return { x: coopX, z: coopZ, group: coopGroup };
 }
 
+// ─── Farm entrance arch with sign ──────────────────────────────────────
+export function createFarmArch(scene) {
+  const arch = new THREE.Group();
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x8b6b3a });
+  const signMat = new THREE.MeshLambertMaterial({ color: 0xd4a66a });
+
+  // Two posts
+  const postGeo = new THREE.CylinderGeometry(0.25, 0.3, 5, 8);
+  const leftPost = new THREE.Mesh(postGeo, woodMat);
+  leftPost.position.set(-3, 2.5, 0);
+  leftPost.castShadow = true;
+  arch.add(leftPost);
+  const rightPost = new THREE.Mesh(postGeo, woodMat);
+  rightPost.position.set(3, 2.5, 0);
+  rightPost.castShadow = true;
+  arch.add(rightPost);
+
+  // Crossbeam
+  const beamGeo = new THREE.BoxGeometry(7, 0.4, 0.3);
+  const beam = new THREE.Mesh(beamGeo, woodMat);
+  beam.position.set(0, 5.2, 0);
+  beam.castShadow = true;
+  arch.add(beam);
+
+  // Sign board
+  const signGeo = new THREE.BoxGeometry(5, 1.2, 0.15);
+  const sign = new THREE.Mesh(signGeo, signMat);
+  sign.position.set(0, 4.2, 0);
+  sign.castShadow = true;
+  arch.add(sign);
+
+  // Sign text — "Obi's Farm" using simple geometry letters
+  // Use a CanvasTexture for the text
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#d4a66a';
+  ctx.fillRect(0, 0, 512, 128);
+  ctx.fillStyle = '#3a2a1a';
+  ctx.font = 'bold 72px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText("Obi's Farm", 256, 64);
+  // Little heart
+  ctx.fillStyle = '#cc4444';
+  ctx.font = '36px serif';
+  ctx.fillText('🐶', 256, 110);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const signFaceMat = new THREE.MeshBasicMaterial({ map: tex });
+  const signFace = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.1), signFaceMat);
+  signFace.position.set(0, 4.2, 0.08);
+  arch.add(signFace);
+
+  // Vine decoration on posts (green spirals)
+  const vineMat = new THREE.MeshLambertMaterial({ color: 0x3a6b1a });
+  for (let side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const leaf = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 6, 4),
+        vineMat
+      );
+      leaf.position.set(side * 3 + (Math.random() - 0.5) * 0.3, 1 + i * 1.2, (Math.random() - 0.5) * 0.3);
+      arch.add(leaf);
+    }
+  }
+
+  // Position the arch over the path entrance from the road
+  arch.position.set(-15, 0, -42);
+  scene.add(arch);
+  return arch;
+}
+
 // ─── Blackberry rows ───────────────────────────────────────────────────
-export function createBlackberryRows(scene) {
+export function createBlackberryRows(scene, windRegistry) {
   // Rows of blackberry bushes — trellis style
   const bushMat = new THREE.MeshLambertMaterial({ color: 0x2d5a1f });
   const berryMat = new THREE.MeshLambertMaterial({ color: 0x2a0a4a });
@@ -294,6 +392,11 @@ export function createBlackberryRows(scene) {
       bushGroup.position.set(row.x, 0, z);
       scene.add(bushGroup);
       bushPositions.push([row.x, z]);
+
+      // Register for wind sway
+      if (windRegistry) {
+        windRegistry.register(bushGroup, 0.04 + Math.random() * 0.02);
+      }
     }
   });
   return bushPositions;
